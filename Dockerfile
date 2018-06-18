@@ -1,32 +1,26 @@
-FROM node:8.11.2-jessie
+# We need a base image to build upon. Use the latest node image from
+# dockerhub as the base image so we get node and npm for free
+FROM node:latest
+MAINTAINER Keone Martin
 
-# Add NBN certs into the container
-RUN apt-get update
-RUN apt-get install -y make uuid-runtime
-ADD https://apro.nbnco.net.au/cdtools-generic/nbncerts/openssl/all_cacerts.pem /tmp/
-RUN mv /tmp/all_cacerts.pem /usr/local/share/ca-certificates/all_cacerts.crt
-RUN update-ca-certificates
-ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
-# Configure NPM
-RUN npm config set registry https://apro.nbnco.net.au/api/npm/npm-remote
-RUN npm config set cafile /etc/ssl/certs/ca-certificates.crt
+# Store all our app code in the /src folder, starting from package.json
+# first. Why copy package.json first? So we can take advantage of
+# the docker build cache. More below.
+COPY package.json /src/package.json
 
-# Create app directory
-RUN mkdir /usr/src/app
-WORKDIR /usr/src/app
+# Once we have package.json, do npm install (restricting the loglevel
+# to minimise noise)
+RUN cd /src && npm install --loglevel error
 
-# add env path
-ENV PATH /usr/src/app/node_modules/.bin:$PATH
+# Copy all our code (yes including package.json again) to /src.
+COPY . /src
 
-# Copy package files for npm install before copying app files that are less volatile
-COPY package*.json ./
+# Change directory into the /src folder so we can execute npm commands
+WORKDIR /src
 
-# Install application dependencies
-RUN npm install
-
-# copy app files
-COPY . .
-
+# This is the express port on which our app runs
 EXPOSE 3000
 
-CMD ["npm", "start"]
+# This is the default command to execute when docker run is issued. Only
+# one CMD instruction is allowed per Dockerfile.
+CMD npm start
